@@ -37,8 +37,22 @@ services:
       - db_network
     depends_on:
       postgres:
-        condition: service_healthy
-
+        condition: service_healthy    # 確保 DB 健康檢查成功後，GUI 才會啟動
+  
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports: ["5000:8080"]    # 主機 5000 對應容器 8080
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - EnableHttpsRedirection=false
+      - ConnectionStrings__DefaultConnection=Host=postgres;Port=5432;Database=${POSTGRES_DB:-mydb};Username=${POSTGRES_USER:-admin};Password=${POSTGRES_PASSWORD:-changeme};
+    networks:
+      - db_network
+    depends_on:
+      postgres:
+        condition: service_healthy    # 確保 DB 健康檢查成功後，API 才會啟動
 volumes:
   postgres_data:
   pgadmin_data:
