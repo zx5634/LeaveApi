@@ -1,4 +1,5 @@
 using System.Net;
+using System.Text.Encodings.Web;
 using System.Text.Json;
 
 namespace LeaveApi.Middleware;
@@ -6,6 +7,10 @@ namespace LeaveApi.Middleware;
 public class ExceptionHandlingMiddleware
 {
     private readonly RequestDelegate _next;
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
+    {
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+    };
 
     public ExceptionHandlingMiddleware(RequestDelegate next)
     {
@@ -38,7 +43,7 @@ public class ExceptionHandlingMiddleware
             exception.Message,
             context.Response.StatusCode
         };
-        return context.Response.WriteAsync(JsonSerializer.Serialize(response));
+        return context.Response.WriteAsync(JsonSerializer.Serialize(response, JsonOptions));
     }
 }
 
