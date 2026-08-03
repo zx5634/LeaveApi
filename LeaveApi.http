@@ -1,6 +1,21 @@
 @LeaveApi_HostAddress = http://localhost:5183
 
-GET {{LeaveApi_HostAddress}}/weatherforecast/
+POST {{LeaveApi_HostAddress}}/api/LeaveRequests
+Accept: application/json
+Content-Type: application/json
+
+{
+    "employeeId": 1,
+    "type": "Annual",
+    "startDate": "2026-08-02T09:00:00Z",
+    "endDate": "2026-08-03T18:00:00Z",
+    "reason": "Vacation"
+}
+
+###
+
+GET {{LeaveApi_HostAddress}}/api/LeaveRequests?employeeId=1&status=Approved&page=1&pageSize=20
 Accept: application/json
 
 ###
+
