@@ -29,7 +29,7 @@ GET /api/LeaveRequests?employeeId=1&status=Pending&page=1&pageSize=20
 { "items": [ ... ], "page": 1, "pageSize": 20, "totalCount": 42 }
 ```
 
-**Errors** use RFC 7807 `application/problem+json` — the same shape the framework already emits for model-validation failures, so the whole API speaks one error format:
+**Errors** use RFC 9457 `application/problem+json` — the same shape the framework already emits for model-validation failures, so the whole API speaks one error format:
 
 ```json
 {
@@ -93,7 +93,7 @@ tests/          xUnit, SQLite in-memory
 
 **Requests bind to a DTO, never to the entity.** Binding straight to `LeaveRequest` would let a client post `{"status":"Approved"}` and create a pre-approved request, bypassing the state machine entirely. `CreateLeaveRequestDto` exposes five fields and `Status` is not one of them. Responses use DTOs too, which also avoids the `Employee` ↔ `LeaveRequest` serialization cycle.
 
-**One error format, and unexpected failures stay opaque.** `[ApiController]` already returns RFC 7807 `ProblemDetails` for model-validation failures, so the exception middleware emits the same shape rather than inventing a second one. Known business failures put their message in `detail`; anything unexpected returns a generic title with no `detail` and is logged in full server-side, so an internal message never reaches the caller. Every response carries a `traceId` to tie a report back to a log entry.
+**One error format, and unexpected failures stay opaque.** `[ApiController]` already returns problem details for model-validation failures, so the exception middleware emits the same shape rather than inventing a second one. The format is RFC 9457, which obsoleted RFC 7807 in 2023 — the document structure is unchanged, so much of the .NET ecosystem still cites the older number. Known business failures put their message in `detail`; anything unexpected returns a generic title with no `detail` and is logged in full server-side, so an internal message never reaches the caller. Every response carries a `traceId` to tie a report back to a log entry.
 
 **Migrations are applied on startup.** Convenient for a single-instance demo. In production this would move to a separate migration step so that multiple instances cannot race each other.
 

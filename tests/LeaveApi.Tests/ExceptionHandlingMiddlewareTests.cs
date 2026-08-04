@@ -32,7 +32,7 @@ public class ExceptionHandlingMiddlewareTests
 
     // Arrange: 組一個拋出 NotFoundException 的 pipeline，並替 Response 掛上可讀取的 Body
     // Act: InvokeAsync
-    // Assert: 回應為 RFC 7807 ProblemDetails，且中文未被轉成 \uXXXX
+    // Assert: 回應為 RFC 9457 ProblemDetails，且中文未被轉成 \uXXXX
     [Fact]
     public async Task InvokeAsync_WritesProblemDetailsWithUnescapedText()
     {
