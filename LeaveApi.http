@@ -1,5 +1,22 @@
+# LeaveApi — manual test script
+#
+# Runs top to bottom against a freshly seeded database and walks the full
+# acceptance flow: create -> read -> list -> approve -> confirm -> conflict.
+# Seeded employees: 1 (Anna), 2 (Bill).
+
+# Local `dotnet run`
 @LeaveApi_HostAddress = http://localhost:5183
 
+# Docker Compose — comment out the line above and use this one instead
+# @LeaveApi_HostAddress = http://localhost:5000
+
+# Id of the request created by step 1. Adjust if the database is not empty.
+@leaveRequestId = 1
+
+###
+# 1. Create a leave request  ->  201 Created
+#    Response carries a Location header pointing at step 2,
+#    and the body always comes back with "status": "Pending".
 POST {{LeaveApi_HostAddress}}/api/LeaveRequests
 Accept: application/json
 Content-Type: application/json
@@ -7,15 +24,133 @@ Content-Type: application/json
 {
     "employeeId": 1,
     "type": "Annual",
-    "startDate": "2026-08-02T09:00:00Z",
-    "endDate": "2026-08-03T18:00:00Z",
+    "startDate": "2026-09-01T00:00:00Z",
+    "endDate": "2026-09-03T00:00:00Z",
     "reason": "Vacation"
 }
 
 ###
-
-GET {{LeaveApi_HostAddress}}/api/LeaveRequests?employeeId=1&status=Approved&page=1&pageSize=20
+# 2. Read it back  ->  200 OK
+GET {{LeaveApi_HostAddress}}/api/LeaveRequests/{{leaveRequestId}}
 Accept: application/json
 
 ###
+# 3. Create a second request for another employee, so the list has more than
+#    one row  ->  201 Created
+POST {{LeaveApi_HostAddress}}/api/LeaveRequests
+Accept: application/json
+Content-Type: application/json
 
+{
+    "employeeId": 2,
+    "type": "Sick",
+    "startDate": "2026-09-10T00:00:00Z",
+    "endDate": "2026-09-12T00:00:00Z",
+    "reason": "Flu"
+}
+
+###
+# 4. List everything  ->  200 OK
+#    { "items": [...], "page": 1, "pageSize": 20, "totalCount": 2 }
+GET {{LeaveApi_HostAddress}}/api/LeaveRequests
+Accept: application/json
+
+###
+# 5. List with filters and paging  ->  200 OK
+#    employeeId and status are both optional; pageSize is capped at 100.
+GET {{LeaveApi_HostAddress}}/api/LeaveRequests?employeeId=1&status=Pending&page=1&pageSize=20
+Accept: application/json
+
+###
+# 6. Approve  ->  200 OK, "status": "Approved"
+PATCH {{LeaveApi_HostAddress}}/api/LeaveRequests/{{leaveRequestId}}/approve
+Accept: application/json
+
+###
+# 7. Confirm the transition stuck  ->  200 OK, "status": "Approved"
+GET {{LeaveApi_HostAddress}}/api/LeaveRequests/{{leaveRequestId}}
+Accept: application/json
+
+###
+# 8. Approve the same request again  ->  409 Conflict
+#    Only a Pending request can be approved. The request itself is well formed,
+#    so this is a conflict with the resource state, not a bad request.
+PATCH {{LeaveApi_HostAddress}}/api/LeaveRequests/{{leaveRequestId}}/approve
+Accept: application/json
+
+
+# ----------------------------------------------------------------------------
+# Error cases
+# ----------------------------------------------------------------------------
+
+###
+# 9. End date before start date  ->  400 Bad Request
+POST {{LeaveApi_HostAddress}}/api/LeaveRequests
+Accept: application/json
+Content-Type: application/json
+
+{
+    "employeeId": 1,
+    "type": "Annual",
+    "startDate": "2026-10-05T00:00:00Z",
+    "endDate": "2026-10-01T00:00:00Z",
+    "reason": "Wrong order"
+}
+
+###
+# 10. Unknown employee  ->  404 Not Found
+POST {{LeaveApi_HostAddress}}/api/LeaveRequests
+Accept: application/json
+Content-Type: application/json
+
+{
+    "employeeId": 999,
+    "type": "Annual",
+    "startDate": "2026-10-01T00:00:00Z",
+    "endDate": "2026-10-03T00:00:00Z",
+    "reason": "No such employee"
+}
+
+###
+# 11. Overlapping request for the same employee  ->  409 Conflict
+#     Overlaps the range created in step 1. Rejected requests are ignored by
+#     this check, so only Pending and Approved ranges conflict.
+POST {{LeaveApi_HostAddress}}/api/LeaveRequests
+Accept: application/json
+Content-Type: application/json
+
+{
+    "employeeId": 1,
+    "type": "Personal",
+    "startDate": "2026-09-02T00:00:00Z",
+    "endDate": "2026-09-04T00:00:00Z",
+    "reason": "Overlaps step 1"
+}
+
+###
+# 12. Adjacent range, same employee  ->  201 Created
+#     Ranges are half-open: a request starting exactly when another ends does
+#     not overlap.
+POST {{LeaveApi_HostAddress}}/api/LeaveRequests
+Accept: application/json
+Content-Type: application/json
+
+{
+    "employeeId": 1,
+    "type": "Personal",
+    "startDate": "2026-09-03T00:00:00Z",
+    "endDate": "2026-09-05T00:00:00Z",
+    "reason": "Starts where step 1 ends"
+}
+
+###
+# 13. Unknown leave request  ->  404 Not Found
+GET {{LeaveApi_HostAddress}}/api/LeaveRequests/999999
+Accept: application/json
+
+###
+# 14. pageSize above the cap  ->  400 Bad Request
+#     Paging exists to bound the response size, so the limit is enforced
+#     rather than silently clamped.
+GET {{LeaveApi_HostAddress}}/api/LeaveRequests?pageSize=500
+Accept: application/json
