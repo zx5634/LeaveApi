@@ -1,4 +1,4 @@
-using LeaveApi.Models.Dtos;
+﻿using LeaveApi.Models.Dtos;
 using LeaveApi.Models.Entities;
 using LeaveApi.Services;
 using Microsoft.AspNetCore.Mvc;
@@ -8,7 +8,6 @@ namespace LeaveApi.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Produces("application/json")]
 public class LeaveRequestsController(ILeaveRequestService leaveRequestService) : ControllerBase
 {
 	private readonly ILeaveRequestService _leaveRequestService = leaveRequestService;
@@ -21,9 +20,9 @@ public class LeaveRequestsController(ILeaveRequestService leaveRequestService) :
     /// <response code="404">該員工不存在</response>
     /// <response code="409">該員工在該期間已有假單</response>
     [ProducesResponseType(typeof(LeaveRequestDto), StatusCodes.Status201Created)]
-    [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
-    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     [HttpPost]
 	public async Task<IActionResult> GenerateLeave([FromBody] CreateLeaveRequestDto request)
 	{
@@ -37,7 +36,7 @@ public class LeaveRequestsController(ILeaveRequestService leaveRequestService) :
     /// <response code="200">假單的詳細資訊</response>
     /// <response code="404">不存在該假單 ID</response>
     [ProducesResponseType(typeof(LeaveRequestDto), StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     [HttpGet("{id:int}")]
     public async Task<IActionResult> GetLeaveById(int id)
     {
@@ -68,8 +67,8 @@ public class LeaveRequestsController(ILeaveRequestService leaveRequestService) :
     /// <response code="404">不存在該假單 ID</response>
     /// <response code="409">該假單狀態不為 Pending</response>
     [ProducesResponseType(typeof(LeaveRequestDto), StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
-    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     [HttpPatch("{id:int}/approve")]
 	public async Task<IActionResult> ApproveLeaveRequest(int id)
 	{
