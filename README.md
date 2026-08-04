@@ -29,10 +29,17 @@ GET /api/LeaveRequests?employeeId=1&status=Pending&page=1&pageSize=20
 { "items": [ ... ], "page": 1, "pageSize": 20, "totalCount": 42 }
 ```
 
-**Errors** are returned in a single shape by a global middleware:
+**Errors** use RFC 7807 `application/problem+json` — the same shape the framework already emits for model-validation failures, so the whole API speaks one error format:
 
 ```json
-{ "message": "找不到 ID 為 999 的員工。", "statusCode": 404 }
+{
+  "type": "https://tools.ietf.org/html/rfc9110#section-15.5.10",
+  "title": "Conflict",
+  "status": 409,
+  "detail": "假單狀態不是待審核，無法核准。",
+  "instance": "/api/LeaveRequests/1/approve",
+  "traceId": "00-5e01aaaec199c82752b712b0cb85f48a-d1bb8dd2e88138e4-00"
+}
 ```
 
 Enums are sent and received as strings — `"Annual"`, `"Pending"` — not integers.
@@ -85,6 +92,8 @@ tests/          xUnit, SQLite in-memory
 **Enums are stored as `varchar(20)`, not `int`.** The database is directly readable and inserting a new status later cannot silently renumber existing rows. The cost is a larger column and slower comparison. *Known limitation:* only the application enforces the allowed values — a direct `INSERT` can still write arbitrary text. A `CHECK` constraint or a native PostgreSQL enum type would close that.
 
 **Requests bind to a DTO, never to the entity.** Binding straight to `LeaveRequest` would let a client post `{"status":"Approved"}` and create a pre-approved request, bypassing the state machine entirely. `CreateLeaveRequestDto` exposes five fields and `Status` is not one of them. Responses use DTOs too, which also avoids the `Employee` ↔ `LeaveRequest` serialization cycle.
+
+**One error format, and unexpected failures stay opaque.** `[ApiController]` already returns RFC 7807 `ProblemDetails` for model-validation failures, so the exception middleware emits the same shape rather than inventing a second one. Known business failures put their message in `detail`; anything unexpected returns a generic title with no `detail` and is logged in full server-side, so an internal message never reaches the caller. Every response carries a `traceId` to tie a report back to a log entry.
 
 **Migrations are applied on startup.** Convenient for a single-instance demo. In production this would move to a separate migration step so that multiple instances cannot race each other.
 
