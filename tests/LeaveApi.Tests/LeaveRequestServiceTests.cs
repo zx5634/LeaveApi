@@ -2,6 +2,7 @@
 using LeaveApi.Models.Dtos;
 using LeaveApi.Models.Entities;
 using LeaveApi.Services;
+using Microsoft.AspNetCore.Http;
 
 namespace LeaveApi.Tests;
 
@@ -11,7 +12,7 @@ public class LeaveRequestServiceTests: TestBase
     // Act: CreateLeave
     // Assert: 非 null 且 Status == Pending
     [Fact]
-    public async Task GenerateLeave_Success()
+    public async Task CreateLeave_Success()
     {
         var service = new LeaveRequestService(Context);
         var result = await service.CreateLeave(new CreateLeaveRequestDto
@@ -31,7 +32,7 @@ public class LeaveRequestServiceTests: TestBase
     // Act: CreateLeave
     // Assert: 拋 BadRequestException
     [Fact]
-    public async Task GenerateLeave_EndDateMustLaterThanStartDate()
+    public async Task CreateLeave_EndDateMustLaterThanStartDate()
     {
         var service = new LeaveRequestService(Context);
         var request = new CreateLeaveRequestDto
@@ -48,14 +49,15 @@ public class LeaveRequestServiceTests: TestBase
             await service.CreateLeave(request);
         });
 
-        Assert.Contains("End date cannot be prior to start date.", exception.Message);
+        Assert.Equal(LeaveErrors.EndBeforeStart, exception.Message);
+        Assert.Empty(Context.LeaveRequests.Where(x => x.Reason == "Travel"));
     }
 
     // Arrange: 確認員工 Id = 1000 不存在
     // Act: CreateLeave
     // Assert: 拋 NotFoundException
     [Fact]
-    public async Task GenerateLeave_EmployeeMustExist()
+    public async Task CreateLeave_EmployeeMustExist()
     {
         var checkExist = Context.Employees.Any(x => x.Id == 1000);
         Assert.False(checkExist);
@@ -71,14 +73,14 @@ public class LeaveRequestServiceTests: TestBase
             });
         });
 
-        Assert.Contains("No employee found with ID", exception.Message);
+        Assert.Equal(LeaveErrors.EmployeeNotFound(1000), exception.Message);
     }
 
     // Arrange: 塞一筆較小區間的假單
     // Act: CreateLeave
     // Assert: 拋 ConflictException
     [Fact]
-    public async Task GenerateLeave_DateOverlap_OldRangeInsideNewRange()
+    public async Task CreateLeave_DateOverlap_OldRangeInsideNewRange()
     {
         var service = new LeaveRequestService(Context);
         Context.Add(new LeaveRequest
@@ -106,14 +108,15 @@ public class LeaveRequestServiceTests: TestBase
             await service.CreateLeave(request);
         });
 
-        Assert.Contains("A leave request already exists for the same time period.", exception.Message);
+        Assert.Equal(LeaveErrors.PeriodOverlap, exception.Message);
+        Assert.Empty(Context.LeaveRequests.Where(x => x.Reason == "Accident"));
     }
 
     // Arrange: 先塞一筆假單
     // Act: CreateLeave
     // Assert: 拋 ConflictException
     [Fact]
-    public async Task GenerateLeave_DateOverlap_NewEndDate_In_OldRange()
+    public async Task CreateLeave_DateOverlap_NewEndDate_In_OldRange()
     {
         var service = new LeaveRequestService(Context);
         Context.Add(new LeaveRequest
@@ -141,14 +144,15 @@ public class LeaveRequestServiceTests: TestBase
             await service.CreateLeave(request);
         });
 
-        Assert.Contains("A leave request already exists for the same time period.", exception.Message);
+        Assert.Equal(LeaveErrors.PeriodOverlap, exception.Message);
+        Assert.Empty(Context.LeaveRequests.Where(x => x.Reason == "Accident"));
     }
     
     // Arrange: 先塞一筆假單
     // Act: CreateLeave
     // Assert: 拋 ConflictException
     [Fact]
-    public async Task GenerateLeave_DateOverlap_NewStartDate_In_OldRange()
+    public async Task CreateLeave_DateOverlap_NewStartDate_In_OldRange()
     {
         var service = new LeaveRequestService(Context);
         Context.Add(new LeaveRequest
@@ -176,14 +180,15 @@ public class LeaveRequestServiceTests: TestBase
             await service.CreateLeave(request);
         });
 
-        Assert.Contains("A leave request already exists for the same time period.", exception.Message);
+        Assert.Equal(LeaveErrors.PeriodOverlap, exception.Message);
+        Assert.Empty(Context.LeaveRequests.Where(x => x.Reason == "Accident"));
     }
 
     // Arrange: 先塞一筆 Status 為 Pending 的假單
     // Act: CreateLeave
     // Assert: 拋 ConflictException
     [Fact]
-    public async Task GenerateLeave_Conflict_Pending()
+    public async Task CreateLeave_Conflict_Pending()
     {
         var service = new LeaveRequestService(Context);
         Context.Add(new LeaveRequest
@@ -211,14 +216,15 @@ public class LeaveRequestServiceTests: TestBase
             await service.CreateLeave(request);
         });
 
-        Assert.Contains("A leave request already exists for the same time period.", exception.Message);
+        Assert.Equal(LeaveErrors.PeriodOverlap, exception.Message);
+        Assert.Empty(Context.LeaveRequests.Where(x => x.Reason == "Accident"));
     }
 
     // Arrange: 先塞一筆 Status 為 Approved 的假單
     // Act: CreateLeave
     // Assert: 拋 ConflictException
     [Fact]
-    public async Task GenerateLeave_Conflict_Approved()
+    public async Task CreateLeave_Conflict_Approved()
     {
         var service = new LeaveRequestService(Context);
         Context.Add(new LeaveRequest
@@ -246,14 +252,15 @@ public class LeaveRequestServiceTests: TestBase
             await service.CreateLeave(request);
         });
 
-        Assert.Contains("A leave request already exists for the same time period.", exception.Message);
+        Assert.Equal(LeaveErrors.PeriodOverlap, exception.Message);
+        Assert.Empty(Context.LeaveRequests.Where(x => x.Reason == "Accident"));
     }
 
     // Arrange: 先塞一筆假單
     // Act: CreateLeave
     // Assert: 非 null 且 Status == Pending
     [Fact]
-    public async Task GenerateLeave_NonOverlappingRange_Success()
+    public async Task CreateLeave_NonOverlappingRange_Success()
     {
         var service = new LeaveRequestService(Context);
         Context.Add(new LeaveRequest
@@ -285,7 +292,7 @@ public class LeaveRequestServiceTests: TestBase
     // Act: CreateLeave
     // Assert: 非 null 且 Status == Pending
     [Fact]
-    public async Task GenerateLeave_SameRange_OldRequestRejected_Success()
+    public async Task CreateLeave_SameRange_OldRequestRejected_Success()
     {
         var service = new LeaveRequestService(Context);
         Context.Add(new LeaveRequest
@@ -317,7 +324,7 @@ public class LeaveRequestServiceTests: TestBase
     // Act: CreateLeave
     // Assert: 非 null 且 Status == Pending
     [Fact]
-    public async Task GenerateLeave_DifferentEmployee_SameRange_Success()
+    public async Task CreateLeave_DifferentEmployee_SameRange_Success()
     {
         var service = new LeaveRequestService(Context);
         Context.Add(new LeaveRequest
@@ -369,7 +376,7 @@ public class LeaveRequestServiceTests: TestBase
             await service.ApproveLeaveRequest(request.Id);
         });
 
-        Assert.Contains("Leave request status is not pending.", exception.Message);
+        Assert.Equal(LeaveErrors.NotPending, exception.Message);
     }
 
     // Arrange: 先塞一筆狀態為 Pending 的假單
@@ -395,5 +402,29 @@ public class LeaveRequestServiceTests: TestBase
 
         Assert.NotNull(result);
         Assert.Equal(LeaveStatus.Approved, result.Status);
+    }
+
+    // Arrange: 先塞一筆狀態為 Rejected 的假單
+    // Act: ApproveLeaveRequest
+    // Assert: 該假單狀態依然為 Rejected
+    [Fact]
+    public async Task ApproveLeaveRequest_Rejected_DoesNotChangeStatus()
+    {
+        var service = new LeaveRequestService(Context);
+        var request = new LeaveRequest
+        {
+            EmployeeId = 1,
+            Type = LeaveType.Annual,
+            StartDate = DateTime.UtcNow.AddDays(1),
+            EndDate = DateTime.UtcNow.AddDays(3),
+            Reason = "Travel",
+            Status = LeaveStatus.Rejected
+        };
+        Context.Add(request);
+        await Context.SaveChangesAsync();
+
+        await Assert.ThrowsAsync<ConflictException>(() => service.ApproveLeaveRequest(request.Id));
+        
+        Assert.Equal(LeaveStatus.Rejected, (await Context.LeaveRequests.FindAsync(request.Id))!.Status);
     }
 }

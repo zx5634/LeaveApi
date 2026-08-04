@@ -18,28 +18,30 @@ public class LeaveRequestService: ILeaveRequestService
     {
         if (request.EndDate < request.StartDate)
         {
-            throw new BadRequestException("End date cannot be prior to start date.");
+            throw new BadRequestException(LeaveErrors.EndBeforeStart);
         }
 
         var employeeExists = await _context.Employees.AnyAsync(x => x.Id == request.EmployeeId);
         if (!employeeExists)
         {
-            throw new NotFoundException($"No employee found with ID {request.EmployeeId}.");
+            throw new NotFoundException(LeaveErrors.EmployeeNotFound(request.EmployeeId));
         }
-        
+
+        var start = ToUtc(request.StartDate);
+        var end = ToUtc(request.EndDate);
         var hasConflict = await _context.LeaveRequests.AnyAsync(x => x.EmployeeId == request.EmployeeId && 
-        x.StartDate < ToUtc(request.EndDate) && x.EndDate > ToUtc(request.StartDate) && x.Status != LeaveStatus.Rejected);
+        x.StartDate < end && x.EndDate > start && x.Status != LeaveStatus.Rejected);
         if (hasConflict)
         {
-            throw new ConflictException($"A leave request already exists for the same time period.");
+            throw new ConflictException(LeaveErrors.PeriodOverlap);
         }
 
         var leaveRequest = new LeaveRequest
         {
             EmployeeId = request.EmployeeId,
             Type = request.Type,
-            StartDate = ToUtc(request.StartDate),
-            EndDate = ToUtc(request.EndDate),
+            StartDate = start,
+            EndDate = end,
             Reason = request.Reason,
             Status = LeaveStatus.Pending,
             CreatedAt = DateTime.UtcNow
@@ -48,16 +50,7 @@ public class LeaveRequestService: ILeaveRequestService
 
         await _context.SaveChangesAsync();
 
-        return new LeaveRequestDto { 
-            Id = leaveRequest.Id,
-            EmployeeId = leaveRequest.EmployeeId,
-            Type = leaveRequest.Type,
-            StartDate = leaveRequest.StartDate,
-            EndDate = leaveRequest.EndDate,
-            Reason = leaveRequest.Reason,
-            Status = leaveRequest.Status,
-            CreatedAt = leaveRequest.CreatedAt
-        };
+        return MapToDto(leaveRequest);
     }
 
     public async Task<LeaveRequestDto> GetLeaveById(int id)
@@ -65,20 +58,10 @@ public class LeaveRequestService: ILeaveRequestService
         var leave = await _context.LeaveRequests.FirstOrDefaultAsync(x => x.Id == id);
         if (leave == null)
         {
-            throw new NotFoundException($"ID {id} not found.");
+            throw new NotFoundException(LeaveErrors.LeaveNotFound(id));
         }
 
-        return new LeaveRequestDto
-        {
-            Id = leave!.Id,
-            EmployeeId = leave.EmployeeId,
-            Type = leave.Type,
-            StartDate = leave.StartDate,
-            EndDate = leave.EndDate,
-            Reason = leave.Reason,
-            Status = leave.Status,
-            CreatedAt = leave.CreatedAt
-        };
+        return MapToDto(leave);
     }
 
     public async Task<PagedResultDto> GetLeaveRequests(int? employeeId, LeaveStatus? status, int page, int pageSize)
@@ -93,7 +76,7 @@ public class LeaveRequestService: ILeaveRequestService
         var items = await query.OrderByDescending(x => x.CreatedAt)
             .ThenByDescending(x => x.Id)
             .Skip((page - 1) * pageSize).Take(pageSize)
-            .Select(x => new LeaveRequestDto
+            .Select(x => new LeaveRequestDto    // 不可抽出，換成方法呼叫 EF 就會翻譯不出 SQL，會退化成把整個 entity 撈回記憶體再轉
             {
                 Id = x.Id,
                 EmployeeId = x.EmployeeId,
@@ -119,27 +102,17 @@ public class LeaveRequestService: ILeaveRequestService
         var leave = await _context.LeaveRequests.FirstOrDefaultAsync(x => x.Id == id);
         if (leave == null)
         {
-            throw new NotFoundException($"No leave request found with ID {id}.");
+            throw new NotFoundException(LeaveErrors.LeaveNotFound(id));
         }
-        else if (leave!.Status != LeaveStatus.Pending)
+        else if (leave.Status != LeaveStatus.Pending)
         {
-            throw new ConflictException($"Leave request status is not pending.");
+            throw new ConflictException(LeaveErrors.NotPending);
         }
 
         leave.Status = LeaveStatus.Approved;
         await _context.SaveChangesAsync();
 
-        return new LeaveRequestDto
-        {
-            Id = leave!.Id,
-            EmployeeId = leave.EmployeeId,
-            Type = leave.Type,
-            StartDate = leave.StartDate,
-            EndDate = leave.EndDate,
-            Reason = leave.Reason,
-            Status = leave.Status,
-            CreatedAt = leave.CreatedAt
-        };
+        return MapToDto(leave);
     }
 
     static DateTime ToUtc(DateTime v) => v.Kind switch
@@ -147,5 +120,17 @@ public class LeaveRequestService: ILeaveRequestService
         DateTimeKind.Utc => v,
         DateTimeKind.Local => v.ToUniversalTime(),
         _ => DateTime.SpecifyKind(v, DateTimeKind.Utc)
+    };
+
+    private static LeaveRequestDto MapToDto(LeaveRequest x) => new()
+    {
+        Id = x.Id,
+        EmployeeId = x.EmployeeId,
+        Type = x.Type,
+        StartDate = x.StartDate,
+        EndDate = x.EndDate,
+        Reason = x.Reason,
+        Status = x.Status,
+        CreatedAt = x.CreatedAt
     };
 }
